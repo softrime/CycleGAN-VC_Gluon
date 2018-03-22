@@ -6,4 +6,5 @@ test_iter = SentenceIter(scp=scp, feat_dim=24)
 test_iter.reset()
 
 for i, data in enumerate(test_iter):
-  print(data.shape)
+  print(data)
+  input()

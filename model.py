@@ -92,12 +92,12 @@ class Generator(gluon.nn.Block):
 
     self.Conv_u1 = gluon.nn.Conv2D(channels=1024, kernel_size=(1, 5), strides=(1, 1), padding=(0, 2))
     self.ps_u1 = PixelShuffler()
-    self.IN_u1 = InstanceNorm(channels=1024)
+    self.IN_u1 = InstanceNorm(channels=512)
     self.ps_u1_g = PixelShuffler()
-    self.GLU_u1 = GLU(channels=1024, kernel_size=(1, 5), strides=(1, 1), padding=(0, 2))
+    self.GLU_u1 = GLU(channels=1024, kernel_size=(1, 5), strides=(1, 1), padding=(0, 2), )
     self.Conv_u2 = gluon.nn.Conv2D(channels=512, kernel_size=(1, 5), strides=(1, 1), padding=(0, 2))
     self.ps_u2 = PixelShuffler()
-    self.IN_u2 = InstanceNorm(channels=512)
+    self.IN_u2 = InstanceNorm(channels=256)
     self.ps_u2_g = PixelShuffler()
     self.GLU_u2 = GLU(channels=512, kernel_size=(1, 5), strides=(1, 1), padding=(0, 2))
 

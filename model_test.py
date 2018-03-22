@@ -6,7 +6,7 @@ from model import Generator, Discriminator
 
 
 ##### make data #####
-g_data = nd.ones((1, 24, 1, 1000))
+g_data = nd.ones((1, 24, 1, 128))
 d_data = nd.ones((1, 1, 24, 128))
 
 ##### create model #####
@@ -19,8 +19,12 @@ G_B.collect_params().initialize(ctx=mx.cpu())
 D_A.collect_params().initialize(ctx=mx.cpu())
 D_B.collect_params().initialize(ctx=mx.cpu())
 ##### forward #####
-#g_output = G_A(g_data)
-d_output = D_A(d_data)
+g_output = G_A(g_data)
+#d_output = D_A(d_data)
 
-##### check outputs #####
-print(d_output.shape)
+##### check outputs ######
+#print(g_output.shape)
+for p in G_A.collect_params():
+  print(G_A.collect_params()[p].grad())
+  G_A.collect_params()[p]._grad = G_A.collect_params()[p].grad() + nd.ones((1, 1))
+  print(G_A.collect_params()[p].grad())

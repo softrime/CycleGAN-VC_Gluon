@@ -8,8 +8,10 @@ from mxnet import nd
 
 
 class SentenceIter(mx.io.DataIter):
-  def __init__(self, scp, feat_dim):
+  def __init__(self, scp, feat_dim, is_train=True, segment_length=128):
     self.load_data(scp, feat_dim)
+    self.is_train = is_train
+    self.segment_length = segment_length
   
   def load_data(self, scp, feat_dim):
     F = codecs.open(scp)
@@ -33,9 +35,15 @@ class SentenceIter(mx.io.DataIter):
     return self.next()
 
   def next(self):
-    if self.cur_sentence < self.num_sentences:
-      data = self.data_sets[self.cur_sentence]
-      self.cur_sentence += 1
-      return data
+    if self.is_train:
+      sentence = self.data_sets[random.randint(0, self.num_sentences-1)]
+      segment_idx = random.randint(0, sentence.shape[0]-self.segment_length)
+      data = sentence[segment_idx:segment_idx+self.segment_length, :]
+      return nd.array(data)
     else:
-      raise StopIteration
+      if self.cur_sentence < self.num_sentences:
+        data = self.data_sets[self.cur_sentence]
+        self.cur_sentence += 1
+        return nd.array(data)
+      else:
+        raise StopIteration
