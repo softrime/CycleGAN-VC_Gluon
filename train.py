@@ -26,7 +26,7 @@ def do_train(args, dataA_iter, dataB_iter,
   dataA_iter.reset()
   dataB_iter.reset()
 
-  label = nd.zeros((1, feat_dim, 1, segment_length))
+  label = nd.zeros((1, 1))
 
   loss_cyc_A = 0
   loss_cyc_B = 0
@@ -44,92 +44,136 @@ def do_train(args, dataA_iter, dataB_iter,
     ##############################################################################
 
     # calculate loss for inputA
+    inputA.attach_grad()
     with autograd.record():
-      fakeB = G_A(inputA)
+      fakeB_tmp = G_A(inputA)
+    fakeB = fakeB_tmp.copy()
+    fakeB.attach_grad()
     with autograd.record():
-      cycleA = G_B(fakeB)
+      cycleA_tmp = G_B(fakeB)
+    cycleA = cycleA_tmp.copy()
+
+    if iter==43:
+      #print(G_A.upsample2, G_A.outputs);input()
+      for i, p in enumerate(G_A.collect_params()):
+        print(p, G_A.collect_params()[p].data())
+
+
+
+
+    cycleA.attach_grad()
     with autograd.record():
-      L_cycleA = loss(pred=cycleA, label=inputA)
+      L_cycleA = loss(cycleA, inputA)
     L_cycleA.backward()
     cycleA_grad = cycleA.grad * lambda_cyc
-    G_B.backward(cycleA_grad)
+    cycleA_tmp.backward(cycleA_grad)
     fakeB_grad_G = fakeB.grad
 
     label[:] = 1
+
+    fakeB.attach_grad()
     with autograd.record():
-      pred = D_B(fakeB)
+      fakeB_D = nd.reshape(fakeB, (1, 1, feat_dim, segment_length))
+      pred = D_B(fakeB_D)
       DlossB = loss(pred, label)
     DlossB.backward()
     fakeB_grad_D = fakeB.grad
-    G_A.backward(fakeB_grad_G + fakeB_grad_D)
+    fakeB_tmp.backward(fakeB_grad_G + fakeB_grad_D)
 
-    gradG_A = [[G_A.collect_params()[p]._grad] for i, p in enumerate(G_A.collect_params())]
-    gradG_B = [[G_B.collect_params()[p]._grad] for i, p in enumerate(G_B.collect_params())]
+    gradG_A = [G_A.collect_params()[p].grad().copy() for i, p in enumerate(G_A.collect_params())]
+    gradG_B = [G_B.collect_params()[p].grad().copy() for i, p in enumerate(G_B.collect_params())]
+
 
     # calculate loss for inputB
+    inputB.attach_grad()
     with autograd.record():
-      fakeA = G_B(inputB)
+      fakeA_tmp = G_B(inputB)
+    fakeA = fakeA_tmp.copy()
+    fakeA.attach_grad()
     with autograd.record():
-      cycleB = G_A(fakeA)
+      cycleB_tmp = G_A(fakeA)
+    cycleB = cycleB_tmp.copy()
+    cycleB.attach_grad()
     with autograd.record():
       L_cycleB = loss(cycleB, inputB)
     L_cycleB.backward()
     cycleB_grad = cycleB.grad * lambda_cyc
-    G_A.backward(cycleB_grad)
+    cycleB_tmp.backward(cycleB_grad)
     fakeA_grad_G = fakeA.grad
-
+    
     label[:] = 1
+    fakeA.attach_grad()
     with autograd.record():
-      pred = D_A(fakeA)
+      fakeA_D = nd.reshape(fakeA, (1, 1, feat_dim, segment_length))
+      pred = D_A(fakeA_D)
       DlossA = loss(pred, label)
     DlossA.backward()
     fakeA_grad_D = fakeA.grad
-    G_B.backward(fakeA_grad_G + fakeA_grad_D)
+    fakeA_tmp.backward(fakeA_grad_G + fakeA_grad_D)
+
 
     # update G
     for i, p in enumerate(G_A.collect_params()):
       gradsr = G_A.collect_params()[p].grad()
       gradsf = gradG_A[i]
-      G_A.collect_params()[p]._grad = gradsr + gradsf
+      assert(gradsr.shape==gradsf.shape)
+      assert(len(G_A.collect_params()[p]._grad)==1)
+      G_A.collect_params()[p]._grad[0] = gradsr + gradsf
+
+
 
     for i, p in enumerate(G_B.collect_params()):
       gradsr = G_B.collect_params()[p].grad()
       gradsf = gradG_B[i]
-      G_B.collect_params()[p]._grad = gradsr + gradsf
+      assert(gradsr.shape==gradsf.shape)
+      assert(len(G_B.collect_params()[p]._grad)==1)
+      G_B.collect_params()[p]._grad[0] = gradsr + gradsf
+      
+    gradG_A = [G_A.collect_params()[p].grad().copy() for i, p in enumerate(G_A.collect_params())]
+    gradG_B = [G_B.collect_params()[p].grad().copy() for i, p in enumerate(G_B.collect_params())]
 
-    gradG_A = [[G_A.collect_params()[p]._grad] for i, p in enumerate(G_A.collect_params())]
-    gradG_B = [[G_B.collect_params()[p]._grad] for i, p in enumerate(G_B.collect_params())]
 
     # identity loss
+    inputB.attach_grad()
     with autograd.record():
-      indenB = G_A(inputB)
+      indenB_tmp = G_A(inputB)
+    indenB = indenB_tmp.copy()
+    indenB.attach_grad()
     with autograd.record():
       L = loss(indenB, inputB)
     L.backward()
-    indenB_grad = indenB.grad() * lambda_id
-    G_A.backward(indenB_grad)
+    indenB_grad = indenB.grad * lambda_id
+    indenB_tmp.backward(indenB_grad)
 
+    inputA.attach_grad()
     with autograd.record():
-      indenA = G_B(inputA)
+      indenA_tmp = G_B(inputA)
+    indenA = indenA_tmp.copy()
+    indenA.attach_grad()
     with autograd.record():
       L = loss(indenA, inputA)
     L.backward()
-    indenA_grad = indenA.grad() * lambda_id
-    G_B.backward(indenA_grad)
+    indenA_grad = indenA.grad * lambda_id
+    indenA_tmp.backward(indenA_grad)
+
 
     # update G
     for i, p in enumerate(G_A.collect_params()):
       gradsr = G_A.collect_params()[p].grad()
       gradsf = gradG_A[i]
-      G_A.collect_params()[p]._grad = gradsr + gradsf
+      assert(gradsr.shape==gradsf.shape)
+      assert(len(G_A.collect_params()[p]._grad)==1)
+      G_A.collect_params()[p]._grad[0] = gradsr + gradsf
 
     for i, p in enumerate(G_B.collect_params()):
       gradsr = G_B.collect_params()[p].grad()
       gradsf = gradG_B[i]
-      G_B.collect_params()[p]._grad = gradsr + gradsf
+      assert(gradsr.shape==gradsf.shape)
+      assert(len(G_B.collect_params()[p]._grad)==1)
+      G_B.collect_params()[p]._grad[0] = gradsr + gradsf
 
-    gradG_A = [[G_A.collect_params()[p]._grad] for i, p in enumerate(G_A.collect_params())]
-    gradG_B = [[G_B.collect_params()[p]._grad] for i, p in enumerate(G_B.collect_params())]
+    gradG_A = [G_A.collect_params()[p].grad().copy() for i, p in enumerate(G_A.collect_params())]
+    gradG_B = [G_B.collect_params()[p].grad().copy() for i, p in enumerate(G_B.collect_params())]
 
 
     ##############################################################################
@@ -138,26 +182,31 @@ def do_train(args, dataA_iter, dataB_iter,
 
     fakeB = G_A(inputA)
     fakeA = G_B(inputB)
-
     def train_discriminator(modD, modD_trainer, real, fake):
       label[:] = 1
+      real.attach_grad()
       with autograd.record():
-        pred = modD(inputA)
+        real = nd.reshape(real, (1, 1, feat_dim, segment_length))
+        pred = modD(real)
         L_true = loss(pred, label)
       L_true.backward()
-      gradmodD = [[modD.collect_params()[p]._grad] for i, p in enumerate(modD.collect_params())]
-      
+      gradmodD = [modD.collect_params()[p].grad().copy() for i, p in enumerate(modD.collect_params())]
+
       label[:] = 0
+      fake.attach_grad()
       with autograd.record():
-        pred = modD(fakeA)
-        L_fake = loss(pred, fakeA)
+        fake = nd.reshape(fake, (1, 1, feat_dim, segment_length))
+        pred = modD(fake)
+        L_fake = loss(pred, label)
       L_fake.backward()
       
-      L = L_fake = L_true
+      L = L_fake + L_true
       for i, p in enumerate(modD.collect_params()):
         gradsr = modD.collect_params()[p].grad()
         gradsf = gradmodD[i]
-        modD.collect_params()[p]._grad = gradsr + gradsf
+        assert(gradsr.shape==gradsf.shape)
+        assert(len(modD.collect_params()[p]._grad)==1)
+        modD.collect_params()[p]._grad[0] = gradsr + gradsf
       modD_trainer.step(1)
       return L/2
     
@@ -173,31 +222,42 @@ def do_train(args, dataA_iter, dataB_iter,
     for i, p in enumerate(G_A.collect_params()):
       gradsr = G_A.collect_params()[p].grad()
       gradsf = gradG_A[i]
-      G_A.collect_params()[p]._grad = gradsr + gradsf
+      assert(gradsr.shape==gradsf.shape)
+      assert(len(G_A.collect_params()[p]._grad)==1)
+      G_A.collect_params()[p]._grad[0] = gradsr + gradsf
     G_A_trainer.step(1)
 
     for i, p in enumerate(G_B.collect_params()):
       gradsr = G_B.collect_params()[p].grad()
       gradsf = gradG_B[i]
-      G_B.collect_params()[p]._grad = gradsr + gradsf
+      assert(gradsr.shape==gradsf.shape)
+      assert(len(G_B.collect_params()[p]._grad)==1)
+      G_B.collect_params()[p]._grad[0] = gradsr + gradsf
     G_B_trainer.step(1)
 
-    loss_cyc_A    += L_cycleA
-    loss_cyc_B    += L_cycleB
-    loss_D_B_fake += DlossB
-    loss_D_A_fake += DlossA
-    loss_D_A      += lossD_A
-    loss_D_B      += lossD_B
+    loss_cyc_A    += L_cycleA.asnumpy()[0]
+    loss_cyc_B    += L_cycleB.asnumpy()[0]
+    loss_D_B_fake += DlossB.asnumpy()[0]
+    loss_D_A_fake += DlossA.asnumpy()[0]
+    loss_D_A      += lossD_A.asnumpy()[0]
+    loss_D_B      += lossD_B.asnumpy()[0]
+    #print(loss_cyc_A, loss_cyc_B, loss_D_B_fake, loss_D_A_fake, loss_D_A, loss_D_B)
 
-    if iter % show_loss_every == 0:
+    if iter % show_loss_every == 0 and iter != 0:
       loss_cyc_A    /= show_loss_every
       loss_cyc_B    /= show_loss_every
       loss_D_B_fake /= show_loss_every
       loss_D_A_fake /= show_loss_every
       loss_D_A      /= show_loss_every
       loss_D_B      /= show_loss_every
-      logging.info('iter:%d | loss_cyc_A:%f | loss_cyc_B:%f | loss_D_B_fake:%f | loss_D_A_fake:%f | loss_D_A:%f | loss_D_B:%f', 
-                    iter*show_loss_every, loss_cyc_A, loss_cyc_B, loss_D_B_fake, loss_D_A_fake, loss_D_A, loss_D_B)  
+      logging.info('iter[%d] | loss_cyc_A:%f | loss_cyc_B:%f | loss_D_B_fake:%f | loss_D_A_fake:%f | loss_D_A:%f | loss_D_B:%f', 
+                    iter, loss_cyc_A, loss_cyc_B, loss_D_B_fake, loss_D_A_fake, loss_D_A, loss_D_B)  
+      loss_cyc_A    = 0
+      loss_cyc_B    = 0
+      loss_D_B_fake = 0
+      loss_D_A_fake = 0
+      loss_D_A      = 0
+      loss_D_B      = 0
 
 
         
@@ -268,26 +328,22 @@ if __name__=='__main__':
 
   G_A_trainer = gluon.Trainer(G_A.collect_params(), 
                               optimizer='adam', 
-                              optimizer_params={'learning_rate':G_learning_rate,
-                                                'momentum':momentum}
+                              optimizer_params={'learning_rate':G_learning_rate}
                               )
 
   G_B_trainer = gluon.Trainer(G_B.collect_params(), 
                               optimizer='adam', 
-                              optimizer_params={'learning_rate':G_learning_rate,
-                                                'momentum':momentum}
+                              optimizer_params={'learning_rate':G_learning_rate}
                               )
 
   D_A_trainer = gluon.Trainer(D_A.collect_params(), 
                               optimizer='adam', 
-                              optimizer_params={'learning_rate':D_learning_rate,
-                                                'momentum':momentum}
+                              optimizer_params={'learning_rate':D_learning_rate}
                               )
 
   D_B_trainer = gluon.Trainer(D_B.collect_params(), 
                               optimizer='adam', 
-                              optimizer_params={'learning_rate':D_learning_rate,
-                                                'momentum':momentum}
+                              optimizer_params={'learning_rate':D_learning_rate}
                               )
 
   loss = gluon.loss.L2Loss()

@@ -16,7 +16,7 @@ class InstanceNorm(gluon.nn.Block):
 
 class GLU(gluon.nn.Block):
   def __init__(self, channels, kernel_size, strides, padding, **kwargs):
-    super(GLU, self).__init__(**kwargs)
+    super(GLU, self).__init__( **kwargs)
     with self.name_scope():
       self.Conv = gluon.nn.Conv2D(channels=channels, kernel_size=kernel_size, strides=strides, padding=padding, activation='sigmoid')
 
@@ -165,7 +165,7 @@ class Generator(gluon.nn.Block):
     residual_out = residual_6
     # Upsample
     upsample1 = self.Conv_u1(residual_out)
-    upsample1 = self.ps_u1(upsample1)
+    upsample1 = self.ps_u1(upsample1) # no problem
     upsample1 = self.IN_u1(upsample1)
     upsample1 = self.GLU_u1(residual_out, upsample1, True, self.ps_u1_g)
     upsample2 = self.Conv_u2(upsample1)
@@ -174,10 +174,10 @@ class Generator(gluon.nn.Block):
     upsample2 = self.GLU_u2(upsample1, upsample2, True, self.ps_u2_g)
 
     # Postprocess
-    outputs = self.Conv_out(upsample2)
+    self.outputs = self.Conv_out(upsample2)
     
     # output.shape = (1, T, 24)
-    return outputs
+    return self.outputs
 
 
 
