@@ -36,6 +36,17 @@ def do_train(args, dataA_iter, dataB_iter,
   loss_D_B   = 0
 
   for iter in range(num_iteration):
+
+    if iter!=0:
+      for i, p in enumerate(G_A.collect_params()):
+        G_A.collect_params()[p]._grad[0][:] = 0
+      for i, p in enumerate(G_B.collect_params()):
+        G_B.collect_params()[p]._grad[0][:] = 0
+      for i, p in enumerate(D_A.collect_params()):
+        D_A.collect_params()[p]._grad[0][:] = 0
+      for i, p in enumerate(D_B.collect_params()):
+        D_B.collect_params()[p]._grad[0][:] = 0
+
     inputA = dataA_iter.next()
     inputB = dataB_iter.next()
 
@@ -52,15 +63,6 @@ def do_train(args, dataA_iter, dataB_iter,
     with autograd.record():
       cycleA_tmp = G_B(fakeB)
     cycleA = cycleA_tmp.copy()
-
-    if iter==43:
-      #print(G_A.upsample2, G_A.outputs);input()
-      for i, p in enumerate(G_A.collect_params()):
-        print(p, G_A.collect_params()[p].data())
-
-
-
-
     cycleA.attach_grad()
     with autograd.record():
       L_cycleA = loss(cycleA, inputA)
@@ -119,8 +121,6 @@ def do_train(args, dataA_iter, dataB_iter,
       assert(gradsr.shape==gradsf.shape)
       assert(len(G_A.collect_params()[p]._grad)==1)
       G_A.collect_params()[p]._grad[0] = gradsr + gradsf
-
-
 
     for i, p in enumerate(G_B.collect_params()):
       gradsr = G_B.collect_params()[p].grad()
@@ -225,7 +225,6 @@ def do_train(args, dataA_iter, dataB_iter,
       assert(gradsr.shape==gradsf.shape)
       assert(len(G_A.collect_params()[p]._grad)==1)
       G_A.collect_params()[p]._grad[0] = gradsr + gradsf
-    G_A_trainer.step(1)
 
     for i, p in enumerate(G_B.collect_params()):
       gradsr = G_B.collect_params()[p].grad()
@@ -235,13 +234,15 @@ def do_train(args, dataA_iter, dataB_iter,
       G_B.collect_params()[p]._grad[0] = gradsr + gradsf
     G_B_trainer.step(1)
 
+
+
     loss_cyc_A    += L_cycleA.asnumpy()[0]
     loss_cyc_B    += L_cycleB.asnumpy()[0]
     loss_D_B_fake += DlossB.asnumpy()[0]
     loss_D_A_fake += DlossA.asnumpy()[0]
     loss_D_A      += lossD_A.asnumpy()[0]
     loss_D_B      += lossD_B.asnumpy()[0]
-    #print(loss_cyc_A, loss_cyc_B, loss_D_B_fake, loss_D_A_fake, loss_D_A, loss_D_B)
+
 
     if iter % show_loss_every == 0 and iter != 0:
       loss_cyc_A    /= show_loss_every

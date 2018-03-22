@@ -171,10 +171,10 @@ class Generator(gluon.nn.Block):
     upsample2 = self.Conv_u2(upsample1)
     upsample2 = self.ps_u2(upsample2)
     upsample2 = self.IN_u2(upsample2)
-    upsample2 = self.GLU_u2(upsample1, upsample2, True, self.ps_u2_g)
+    self.upsample2 = self.GLU_u2(upsample1, upsample2, True, self.ps_u2_g)
 
     # Postprocess
-    self.outputs = self.Conv_out(upsample2)
+    self.outputs = self.Conv_out(self.upsample2)
     
     # output.shape = (1, T, 24)
     return self.outputs
