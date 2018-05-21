@@ -1,2 +1,2 @@
 # cycleGAN-for-VC
-cycleGAN-VC-gluon
+This is the gluon-implementation of cyclegan for voice conversion.
