@@ -1,8 +1,7 @@
-#!/mnt/lustre/sjtu/users/szw73/.miniconda/envs/gluon/bin/python
+#!/usr/bin/python
 import os, sys
 import codecs
 
-sys.path.append('/mnt/lustre/sjtu/users/szw73/work/VC/CycleGAN/SF1-TF2')
 
 import numpy as np
 import mxnet as mx

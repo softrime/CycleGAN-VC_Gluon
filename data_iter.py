@@ -2,8 +2,6 @@ import os, sys
 import codecs
 import random
 
-sys.path.append('/mnt/lustre/sjtu/users/szw73/work/VC/CycleGAN/SF1-TF2')
-
 import numpy as np
 import mxnet as mx
 from mxnet import nd
