@@ -1,6 +1,9 @@
+#!/mnt/lustre/sjtu/users/szw73/.miniconda/envs/gluon/bin/python
 import os, sys
 import logging
 import time
+
+sys.path.append('/mnt/lustre/sjtu/users/szw73/work/VC/CycleGAN/SF1-TF2')
 
 import mxnet as mx
 from mxnet import gluon, autograd
@@ -21,12 +24,16 @@ def do_train(args, dataA_iter, dataB_iter,
   feat_dim         = args.config.getint('data', 'feat_dim')
   segment_length   = args.config.getint('train', 'segment_length')
   show_loss_every  = args.config.getint('train', 'show_loss_every')
-
+  G_learning_rate  = args.config.getfloat('train', 'G_learning_rate')
+  D_learning_rate  = args.config.getfloat('train', 'D_learning_rate')
+  source_speaker   = args.config.get('data', 'source_speaker')
+  target_speaker   = args.config.get('data', 'target_speaker')
+  contexts         = parse_contexts(args)
 
   dataA_iter.reset()
   dataB_iter.reset()
 
-  label = nd.zeros((1, 1))
+  label = nd.zeros((1, 1), ctx=contexts[0])
 
   loss_cyc_A = 0
   loss_cyc_B = 0
@@ -36,6 +43,9 @@ def do_train(args, dataA_iter, dataB_iter,
   loss_D_B   = 0
 
   for iter in range(num_iteration):
+
+    if iter==10000:
+      lambda_id = 0
 
     if iter!=0:
       for i, p in enumerate(G_A.collect_params()):
@@ -49,7 +59,9 @@ def do_train(args, dataA_iter, dataB_iter,
 
     inputA = dataA_iter.next()
     inputB = dataB_iter.next()
-
+    inputA = inputA.as_in_context(contexts[0])
+    inputB = inputB.as_in_context(contexts[0])
+      
     ##############################################################################
     # Train Generator                                                                    
     ##############################################################################
@@ -113,7 +125,7 @@ def do_train(args, dataA_iter, dataB_iter,
     fakeA_grad_D = fakeA.grad
     fakeA_tmp.backward(fakeA_grad_G + fakeA_grad_D)
 
-
+    
     # update G
     for i, p in enumerate(G_A.collect_params()):
       gradsr = G_A.collect_params()[p].grad()
@@ -225,7 +237,8 @@ def do_train(args, dataA_iter, dataB_iter,
       assert(gradsr.shape==gradsf.shape)
       assert(len(G_A.collect_params()[p]._grad)==1)
       G_A.collect_params()[p]._grad[0] = gradsr + gradsf
-
+    G_A_trainer.step(1)
+    
     for i, p in enumerate(G_B.collect_params()):
       gradsr = G_B.collect_params()[p].grad()
       gradsf = gradG_B[i]
@@ -234,15 +247,17 @@ def do_train(args, dataA_iter, dataB_iter,
       G_B.collect_params()[p]._grad[0] = gradsr + gradsf
     G_B_trainer.step(1)
 
+    if iter==0:
+       logging.info('[%s] | iter[%d] | loss_cyc_A:%f | loss_cyc_B:%f | loss_D_B_fake:%f | loss_D_A_fake:%f | loss_D_A:%f | loss_D_B:%f', 
+                    time.ctime(), iter, L_cycleA.asnumpy()[0], L_cycleB.asnumpy()[0], DlossB.asnumpy()[0], DlossA.asnumpy()[0], lossD_A.asnumpy()[0], lossD_B.asnumpy()[0])  
 
-
-    loss_cyc_A    += L_cycleA.asnumpy()[0]
-    loss_cyc_B    += L_cycleB.asnumpy()[0]
-    loss_D_B_fake += DlossB.asnumpy()[0]
-    loss_D_A_fake += DlossA.asnumpy()[0]
-    loss_D_A      += lossD_A.asnumpy()[0]
-    loss_D_B      += lossD_B.asnumpy()[0]
-
+    if iter!=0:
+      loss_cyc_A    += L_cycleA.asnumpy()[0]
+      loss_cyc_B    += L_cycleB.asnumpy()[0]
+      loss_D_B_fake += DlossB.asnumpy()[0]
+      loss_D_A_fake += DlossA.asnumpy()[0]
+      loss_D_A      += lossD_A.asnumpy()[0]
+      loss_D_B      += lossD_B.asnumpy()[0]
 
     if iter % show_loss_every == 0 and iter != 0:
       loss_cyc_A    /= show_loss_every
@@ -251,14 +266,19 @@ def do_train(args, dataA_iter, dataB_iter,
       loss_D_A_fake /= show_loss_every
       loss_D_A      /= show_loss_every
       loss_D_B      /= show_loss_every
-      logging.info('iter[%d] | loss_cyc_A:%f | loss_cyc_B:%f | loss_D_B_fake:%f | loss_D_A_fake:%f | loss_D_A:%f | loss_D_B:%f', 
-                    iter, loss_cyc_A, loss_cyc_B, loss_D_B_fake, loss_D_A_fake, loss_D_A, loss_D_B)  
+      logging.info('[%s] | iter[%d] | loss_cyc_A:%f | loss_cyc_B:%f | loss_D_B_fake:%f | loss_D_A_fake:%f | loss_D_A:%f | loss_D_B:%f', 
+                    time.ctime(), iter, loss_cyc_A, loss_cyc_B, loss_D_B_fake, loss_D_A_fake, loss_D_A, loss_D_B)  
       loss_cyc_A    = 0
       loss_cyc_B    = 0
       loss_D_B_fake = 0
       loss_D_A_fake = 0
       loss_D_A      = 0
       loss_D_B      = 0
+      
+      G_A.collect_params().save('checkpoints/G_A/'+'G_A_'+source_speaker+'-'+target_speaker+'_mgc-'+str(feat_dim)+'_iteration-'+str(iter)+'_seglen-'+str(segment_length)+'_lambda-'+str(lambda_cyc)+'-'+str(lambda_id)+'_lr-'+str(G_learning_rate)+'-'+str(D_learning_rate)+'.params')
+      G_B.collect_params().save('checkpoints/G_B/'+'G_B_'+source_speaker+'-'+target_speaker+'_mgc-'+str(feat_dim)+'_iteration-'+str(iter)+'_seglen-'+str(segment_length)+'_lambda-'+str(lambda_cyc)+'-'+str(lambda_id)+'_lr-'+str(G_learning_rate)+'-'+str(D_learning_rate)+'.params')
+      D_A.collect_params().save('checkpoints/D_A/'+'D_A_'+source_speaker+'-'+target_speaker+'_mgc-'+str(feat_dim)+'_iteration-'+str(iter)+'_seglen-'+str(segment_length)+'_lambda-'+str(lambda_cyc)+'-'+str(lambda_id)+'_lr-'+str(G_learning_rate)+'-'+str(D_learning_rate)+'.params')
+      D_B.collect_params().save('checkpoints/D_B/'+'D_B_'+source_speaker+'-'+target_speaker+'_mgc-'+str(feat_dim)+'_iteration-'+str(iter)+'_seglen-'+str(segment_length)+'_lambda-'+str(lambda_cyc)+'-'+str(lambda_id)+'_lr-'+str(G_learning_rate)+'-'+str(D_learning_rate)+'.params')
 
 
         
@@ -269,7 +289,6 @@ if __name__=='__main__':
   ##############################################################################
 
   args = parse_args('default.cfg')
-  contexts = mx.cpu()
   train_source_scp = args.config.get('data', 'train_source_scp')
   train_target_scp = args.config.get('data', 'train_target_scp')
   feat_dim         = args.config.getint('data', 'feat_dim')
@@ -282,7 +301,9 @@ if __name__=='__main__':
   target_speaker   = args.config.get('data', 'target_speaker')
   lambda_cyc       = args.config.getfloat('train', 'lambda_cyc')
   lambda_id        = args.config.getfloat('train', 'lambda_id')
-
+  source_gv        = args.config.get('data', 'source_gv')
+  target_gv        = args.config.get('data', 'target_gv')
+  contexts         = parse_contexts(args)
 
   ##############################################################################
   # Log Configure                                                                     
@@ -307,9 +328,9 @@ if __name__=='__main__':
   # Load Data                                                                     
   ##############################################################################
 
-  dataA_iter = SentenceIter(train_source_scp, feat_dim, 
+  dataA_iter = SentenceIter(contexts, train_source_scp, feat_dim, source_gv,  
                             is_train=True, segment_length=segment_length)
-  dataB_iter = SentenceIter(train_target_scp, feat_dim, 
+  dataB_iter = SentenceIter(contexts, train_target_scp, feat_dim, target_gv, 
                             is_train=True, segment_length=segment_length)
 
 
@@ -322,10 +343,10 @@ if __name__=='__main__':
   D_A = Discriminator()
   D_B = Discriminator()
 
-  G_A.collect_params().initialize(ctx=contexts)
-  G_B.collect_params().initialize(ctx=contexts)
-  D_A.collect_params().initialize(ctx=contexts)
-  D_B.collect_params().initialize(ctx=contexts)
+  G_A.collect_params().initialize(ctx=contexts[0])
+  G_B.collect_params().initialize(ctx=contexts[0])
+  D_A.collect_params().initialize(ctx=contexts[0])
+  D_B.collect_params().initialize(ctx=contexts[0])
 
   G_A_trainer = gluon.Trainer(G_A.collect_params(), 
                               optimizer='adam', 
@@ -348,8 +369,8 @@ if __name__=='__main__':
                               )
 
   loss = gluon.loss.L2Loss()
-                    
-
+  
+                  
   ##############################################################################
   # Training                                                                     
   ##############################################################################

@@ -2,26 +2,37 @@ import os, sys
 import codecs
 import random
 
+sys.path.append('/mnt/lustre/sjtu/users/szw73/work/VC/CycleGAN/SF1-TF2')
+
 import numpy as np
 import mxnet as mx
 from mxnet import nd
-
+from config_util import parse_args, get_checkpoint_path, parse_contexts
 
 class SentenceIter(mx.io.DataIter):
-  def __init__(self, scp, feat_dim, is_train=True, segment_length=128):
+  def __init__(self, contexts, scp, feat_dim, gv_file, is_train=True, segment_length=128):
     self.feat_dim = feat_dim
-    self.load_data(scp, feat_dim)
+    self.contexts = contexts[0]
+    self.load_data(scp, feat_dim, gv_file)
     self.is_train = is_train
     self.segment_length = segment_length
-  
-  def load_data(self, scp, feat_dim):
+  def load_data(self, scp, feat_dim, gv_file):
     F = codecs.open(scp)
     files = F.readlines()
     F.close()
     self.data_sets = []
+    gv = np.loadtxt(gv_file, dtype=np.float32)
+    self.mean = gv[0][:]
+    self.std  = gv[1][:]
     for _, f in enumerate(files):
       path = f.strip().split('\n')[0]
+      print('loading:%s' % path)
       data = np.fromfile(path, dtype='<f', count=-1, sep='').reshape(-1, 25)
+      data = data + self.mean
+      data = data * self.std
+      data = data[:, 1:25]
+      data = nd.array(data, ctx=self.contexts)
+      assert(data.shape[1]==self.feat_dim)
       self.data_sets.append(data[:, :feat_dim])
     self.num_sentences = len(self.data_sets)
 
