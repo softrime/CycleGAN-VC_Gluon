@@ -13,10 +13,10 @@ This project is the **GLUON** implementation of CycleGAN. It is used to train VC
 
 # Enviroment
 
-** python 3.6.2\\
+** python 3.6.2
 
-** mxnet 1.1.0\\
+** mxnet 1.1.0
 
-** numpy 1.13.3 \\
+** numpy 1.13.3
 
 # Reference Paper: [arXiv:1711.11293, 2017](https://arxiv.org/abs/1711.11293)
